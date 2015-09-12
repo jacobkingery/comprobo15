@@ -1,0 +1,32 @@
+Getting Familiar with ROS
+Jacob Kingery
+
+How might rosbag fit into a debugging process as you work on projects in this class?
+    It seems like rosbag is useful because you can replay the messages being published, so you can step through them and look for anomalies or specific cases that are causing your code to break.
+
+Are there any obvious shortcomings of rosbag as a debugging tool?
+    Filesize seems to grow pretty quickly, especially if you want to record the camera output (for testing different image processing techniques, perhaps).
+
+
+Change base_frame to a value other than 'odom'. Does the new behavior make sense?
+    Yes, it makes sense. Both 'base_link' and 'base_laser_link' are relative to the Neato while 'odom' is a fixed "world" reference frame. 'base_laser_link' is centered at the LIDAR and oriented so positive is backwards and 'base_link' is centered at the center of the Neato and oriented so positive is forward.
+
+
+Modify listener.py by inserting a sleep inside the subscriber callback. What happens when you run this code?
+    The listener still goes through each message in order, but only after waiting 10 seconds in between. This obviously led to the listener being way behind the talker with no chance of catching up.
+
+What assumption can you safely make about any code that you put in a sensor callback?
+    The code will be run for each message, regardless of how out-of-date it is.
+
+In what ways might the behavior you observe be suboptimal when programming a robot?
+    In some cases, you may want the robot to use the most recent sensor data, even if that means ignoring some stale messages.
+
+
+Modify listener.py again to explicitly specify a queue_size for your subscriber. What happens now?
+    Now, the callback code is run with the most recent message.
+
+In what scenarios is this behavior good?
+    This is good when you need the robot to use the most recent sensor data. For example, you would want this for the robot-is-about-to-hit-a-wall sensor so that you can avoid running into walls.
+
+In what scenarios is this behavior bad?
+    This is bad when you need the robot to use all of the data it has gathered. For example, some calculations may depend on running averages that could be thrown off if some messages were lost.
