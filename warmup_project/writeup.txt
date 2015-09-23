@@ -1,0 +1,57 @@
+Warmup Project Writeup
+Jacob Kingery
+
+The behaviors I implemented were wall-following, person-following, and obstacle-avoiding.
+
+For wall-following, I used 5 LIDAR readings from the front-left and back-left quadrants to allow for
+glitchy 0.0 readings.  I calculated the error (difference) between each corresponding pair and used
+the average to proportionally (K = 1) set the angular velocity.  The caused the robot to turn away
+from the wall if it was angled towards it and vice-versa, causing it to drive parallel to the wall.
+The linear velocity was set to a constant for simplicity.  Some shortcomings are that the robot must
+start where it will get readings in the front-left and back-left (or be angled towards the wall so that
+it drives forward until it does get readings) and that the proportional control has quite a bit of ringing.
+
+For person-following, I used the front 45 degrees of LIDAR readings, and only used readings that were
+less than 1.5 meters.  The angle information was retained and converted to the range of -pi to pi 
+radians.  The average angle of the readings which saw something was used to proportionally (K = 1) set
+the angular velocity.  The average distance of the readings which saw something had the target distance
+(a parameter of the object) subtracted from it, and this error was used to proportionally (K = 1) set the
+linear velocity.  Some shortcomings are that the robot will think that anything it sees is a person (which
+can cause it to get 'stuck' on stationary objects such as a wall) and that (again) the proportional control
+can by ringy.
+
+For obstacle-avoiding, I used the front 90 degrees of the LIDAR reading, and only used readings that were
+less than 1.0 meters.  The angle information was retained, had 180 degrees added to it to negate the vector,
+and was converted to radians in the -pi to pi range.  The distances were subtracted from 1.0 meter so that
+the magnitude would increase as the robot got closer.  These two pieces of information were then made into
+a complex number for ease of addition.  All of the complex numbers were summed together with a constant
+forward force of 5.0 (magnitude = 5.0, angle = 0.0).  A magnitude and angle were extracted from the sum
+and used to proportionally (K_linear = 0.01, K_angular = 0.1) set the linear and angular velocities.  If
+the angle was pointing behind the robot, I would have negated the magnitude and added (and normalized) pi
+to the angle so that the robot would go backwards.  However, because driving the Neatos backwards is not
+a great idea, I instead set the magnitude to 0.0 so that it could turn in place.  Some shortcomings are
+that the robot can get stuck in corners, the LIDAR sees some things poorly (like table legs), and (yet again)
+the proportional control can have some ringing (though because I slowed things down with my K values, it
+is not very evident).
+
+For the finite-state controller, the states were wall-following and person-following.  In each case,
+the robot did was is described in the relevent sections above.  There are two functions that set the
+linear and angular velocities, one for each behavior.  Using the magic of Python, I set a 'current_state'
+attribute of the node object to one of these functions (it starts out wall-following).  Within these 
+functions, they check if the state should change and set 'current_state' to the other function if so.
+The wall-following function checks if there is something in the front-right area (I avoided the front-left
+so that it would not see the wall that it was following) in order to switch, and the person-following
+function checks if it does not see anything in front of it in order to switch back.  The robustness
+of these transitions is certainly a shortcoming of this dual-state behavior.
+
+My scripts were structured as objects similar to the example object-oriented code provided to us on
+day 3.
+
+I did not encounter any huge challenges, though I did spend quite a bit of time thinking about how I could
+apply the reading on potential fields (which described things in deltaX and deltaY) to our system (where
+we set the linear and angular velocities).
+
+I would improve my project by addressing some of the shortcomings mentioned above or by attempting some
+of the stretch goals from the project description.
+
+I learned that you can create seemingly complex behaviors with surprisingly simple code.
