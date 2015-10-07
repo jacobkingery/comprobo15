@@ -1,0 +1,44 @@
+Robot Localization Project
+Jacob Kingery
+
+What was the goal of your project?
+    Given a map and a reasonably close estimate of initial pose, be able to track the robot's
+    position and heading as it moves around.
+
+How did you solve the problem?
+    I used a particle filter which consists of a cloud of particles, each representing a
+    potential robot pose.  As odometry data is received from the robot, each particle is moved
+    correspondingly (with added noise to represent the uncertainty of the odometry accuracy).
+    Then, the LIDAR data from the robot is used to access how likely each particle is by
+    assuming the LIDAR data came from the particle's position and heading and seeing how well
+    it agrees with the map.  Each particle's weight is updated using its likelihood.  Next, the
+    robot's pose is estimated as a weighted average of the positions and headings of all the
+    particles.  Finally, the particles are resampled.  A subset of the particles in the cloud are
+    kept using a weighted-random selection, and the cloud is filled out with copies of the selected
+    particles.  Then, the process is repeated after the robot has moved or turned a certain amount.
+
+Describe a design decision you had to make when working on your project and what you ultimately did (and why)?
+    A decision I made was to use the (weighted) mean of the particles' poses for the robot pose
+    estimate.  I initially used the mode (the most likely particle) as my estimate, but wanted
+    to remove the restriction of having to guess that the robot was where one of the particles
+    was.  During the transition, I looked at where each method would put the robot and found that
+    there was not a clear winner; sometimes the mean was more accurate, sometimes the mode was more
+    accurate.  I still decided to go with the mean because it seemed to be a bit more accurate
+    overall, though I do not have any quantitative data to back that up.
+
+What if any challenges did you face along the way?
+    I had a funny bug where all of my particles' headings would be divided in half each time their
+    as_pose() method was called.  This turned out to be caused by the heading noise (and thus the
+    heading property) being a numpy array of length one.  A function called by as_pose() was robust
+    enough to work with that as an input, but did not take precautions to not modify the variable
+    in the process.
+
+What would you do to improve your project if you had more time?
+    I would try out my particle filter using a real robot since I only worked in simulation.
+    I would also try to make my particle filter robust to inaccurate initial pose estimates,
+    with the ideal situation being that the robot could be dropped in a room with no idea
+    about where it starts and still be able to localize successfully.
+
+Did you learn any interesting lessons for future robotic programming projects?
+    Sometimes arbitrarily-chosen parameters (like various standard deviations) work out alright.
+    (This might have been a bad lesson to learn...)
