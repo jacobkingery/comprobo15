@@ -8,4 +8,5 @@
   <node name="pf" pkg="my_pf" type="pf.py" output="screen">
     <remap from="scan" to="$(arg scan_topic)"/>
   </node>
+  <include file="$(find neato_2dnav)/launch/move_base.launch"/>
 </launch>
