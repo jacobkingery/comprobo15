@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-""" This is the starter code for the robot localization project """
+""" Robot localization using a particle filter """
 
 import rospy
 
@@ -8,7 +8,6 @@ from std_msgs.msg import Header, String
 from sensor_msgs.msg import LaserScan
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, PoseArray, Pose, Point, Quaternion
 from nav_msgs.srv import GetMap
-from copy import deepcopy
 
 from tf import TransformListener
 from tf import TransformBroadcaster
@@ -16,14 +15,13 @@ from tf.transformations import quaternion_from_euler
 
 import math
 import numpy as np
+from copy import deepcopy
 from numpy.random import random_sample
-from scipy.stats import norm
 from occupancy_field import OccupancyField
 
 from helper_functions import (convert_pose_inverse_transform,
                               convert_translation_rotation_to_pose,
-                              convert_pose_to_xy_and_theta,
-                              angle_diff)
+                              convert_pose_to_xy_and_theta)
 
 class Particle(object):
     """ Represents a hypothesis (particle) of the robot's pose consisting of x,y and theta (yaw)
@@ -49,8 +47,6 @@ class Particle(object):
         """ A helper function to convert a particle to a geometry_msgs/Pose message """
         orientation_tuple = quaternion_from_euler(0,0,self.theta)
         return Pose(position=Point(x=self.x,y=self.y,z=0), orientation=Quaternion(x=orientation_tuple[0], y=orientation_tuple[1], z=orientation_tuple[2], w=orientation_tuple[3]))
-
-    # TODO: define additional helper functions if needed
 
 class ParticleFilter:
     """ The class that represents a Particle Filter ROS Node
@@ -92,7 +88,7 @@ class ParticleFilter:
         self.initial_xy_sigma = 0.2             # standard deviation for initial cloud distribution xy position
         self.initial_theta_sigma = math.pi/6    # standard deviation for initial cloud distrubution angle
         self.sensor_noise_sigma = 0.05          # standard deviation for the sensor error model
-        self.odom_xy_sigma = 0.1                # standard deviation for odom xy
+        self.odom_xy_sigma = 0.08               # standard deviation for odom xy
         self.odom_theta_sigma = math.pi/8       # standard deviation for odom theta
 
         # Setup pubs and subs
@@ -113,11 +109,11 @@ class ParticleFilter:
 
         self.current_odom_xy_theta = []
 
-        # request the map from the map server, the map should be of type nav_msgs/OccupancyGrid
+        # Request the map from the map server, the map should be of type nav_msgs/OccupancyGrid
         rospy.wait_for_service('static_map')
         static_map = rospy.ServiceProxy('static_map', GetMap)
-        map = static_map().map
-        self.occupancy_field = OccupancyField(map)
+        my_map = static_map().map
+        self.occupancy_field = OccupancyField(my_map)
 
         self.initialized = True
 
@@ -127,13 +123,21 @@ class ParticleFilter:
                 (1): compute the mean pose
                 (2): compute the most likely pose (i.e. the mode of the distribution)
         """
-        # first make sure that the particle weights are normalized
-        self.normalize_particles() # not necessary? ####????
-
-        # assign the lastest pose into self.robot_pose as a geometry_msgs.Pose object
+        # Assign the latest pose into self.robot_pose as a geometry_msgs.Pose object
+        # Use the weighted mean of all particles as the estimate of the robot's pose
         weights = [p.w for p in self.particle_cloud]
-        i_most_likely = weights.index(max(weights)) # if more than one particle has the max weight, will only take the first one
-        self.robot_pose = self.particle_cloud[i_most_likely].as_pose()
+        mean_x = np.average([p.x for p in self.particle_cloud], weights=weights)
+        mean_y = np.average([p.y for p in self.particle_cloud], weights=weights)
+        # Using complex numbers for vector addition is fun and easy
+        weighted_angle_vector = sum([p.w * np.exp(1j * p.theta) for p in self.particle_cloud])
+        mean_theta = np.angle(weighted_angle_vector)
+        
+        p_mean = Particle(
+            x = mean_x,
+            y = mean_y,
+            theta = mean_theta
+        )
+        self.robot_pose = p_mean.as_pose()
 
     def update_particles_with_odom(self, msg):
         """ Update the particles using the newly given odometry pose.
@@ -144,7 +148,7 @@ class ParticleFilter:
             msg: this is not really needed to implement this, but is here just in case.
         """
         new_odom_xy_theta = convert_pose_to_xy_and_theta(self.odom_pose.pose)
-        # compute the change in x,y,theta since our last update
+        # Compute the change in x,y,theta since our last update
         if self.current_odom_xy_theta:
             old_odom_xy_theta = self.current_odom_xy_theta
             delta = (new_odom_xy_theta[0] - self.current_odom_xy_theta[0],
@@ -156,7 +160,7 @@ class ParticleFilter:
             self.current_odom_xy_theta = new_odom_xy_theta
             return
 
-        # modify particles using delta (with some noise)
+        # Modify particles using delta (with some noise)
         x, y, theta = self.current_odom_xy_theta
         d_x, d_y, d_theta = delta
         phi = math.atan2(d_y, d_x)
@@ -165,11 +169,12 @@ class ParticleFilter:
         r2 = d_theta - r1
         for i in range(len(self.particle_cloud)):
             p = self.particle_cloud[i]
-            p.theta += r1 + np.random.normal(0.0, self.odom_xy_sigma)
-            p.x += d * math.cos(p.theta) + np.random.normal(0.0, self.odom_theta_sigma)
-            p.y += d * math.sin(p.theta) + np.random.normal(0.0, self.odom_theta_sigma)
-            p.theta += r2 + np.random.normal(0.0, self.odom_xy_sigma)
+            p.theta += r1 + np.random.normal(0.0, self.odom_theta_sigma)
+            p.x += d * math.cos(p.theta) + np.random.normal(0.0, self.odom_xy_sigma)
+            p.y += d * math.sin(p.theta) + np.random.normal(0.0, self.odom_xy_sigma)
+            p.theta += r2 + np.random.normal(0.0, self.odom_theta_sigma)
             self.particle_cloud[i] = p
+
         # For added difficulty: Implement sample_motion_odometry (Prob Rob p 136)
 
     def map_calc_range(self,x,y,theta):
@@ -183,16 +188,13 @@ class ParticleFilter:
             particle is selected in the resampling step.  You may want to make use of the given helper
             function draw_random_sample.
         """
-        # make sure the distribution is normalized
-        self.normalize_particles()
-
-        # pick out some number of particles to keep based on their weights
+        # Pick out some number of particles to keep (in a weighted fashion)
         weights = [p.w for p in self.particle_cloud]
         kept = self.draw_random_sample(self.particle_cloud, weights, self.keep_n_particles)
         self.particle_cloud = kept
 
-        # make copies of these particles to fill out the cloud
-        for i in range(self.n_particles - len(self.particle_cloud)):
+        # Make (deep)copies of these particles to fill out the cloud
+        for i in range(self.n_particles - len(kept)):
             self.particle_cloud.append(deepcopy(self.particle_cloud[i]))
 
         self.normalize_particles()
@@ -210,12 +212,15 @@ class ParticleFilter:
                     obstacle_x = p.x + distance * math.cos(p.theta + angle)
                     obstacle_y = p.y + distance * math.sin(p.theta + angle)
                     error = self.occupancy_field.get_closest_obstacle_distance(obstacle_x, obstacle_y)
+                    # Filter out NaN responses and use a Gaussian distribution
+                    # to estimate the probability of the error.
                     if not math.isnan(error):
                         p_error = math.exp(-error**2 / 2 / self.sensor_noise_sigma**2)
                         p_errors.append(p_error)
+                # Average the probabilities for each scan reading and
+                # update the particle's weight using this value
                 p_avg = np.mean(p_errors)
-                self.particle_cloud[i].w *= p_avg # *= ?
-            self.normalize_particles()
+                self.particle_cloud[i].w *= p_avg
 
     @staticmethod
     def weighted_values(values, probabilities, size):
@@ -355,7 +360,9 @@ class ParticleFilter:
               math.fabs(new_odom_xy_theta[2] - self.current_odom_xy_theta[2]) > self.a_thresh):
             # we have moved far enough to do an update!
             self.update_particles_with_odom(msg)    # update based on odometry
+            self.publish_particles(msg)             # publish particles so the fanout from update_particles_with_odom is seen
             self.update_particles_with_laser(msg)   # update based on laser scan
+            self.normalize_particles()              # normalize particle weights
             self.update_robot_pose()                # update robot's pose
             self.resample_particles()               # resample particles to focus on areas of high density
             self.fix_map_to_odom_transform(msg)     # update map to odom transform now that we have new particles
@@ -398,5 +405,4 @@ if __name__ == '__main__':
     while not(rospy.is_shutdown()):
         # in the main loop all we do is continuously broadcast the latest map to odom transform
         n.broadcast_last_transform()
-        print len(n.particle_cloud)
         r.sleep()
