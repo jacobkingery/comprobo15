@@ -30,45 +30,45 @@ class BallTracker(object):
         self.center_x = 0.0
         self.center_y = 0.0
 
-        self.red_lower_bound = 0
-        cv2.createTrackbar('red lower bound', 'slider_window', 0, 255, self.set_red_lower_bound)
-        self.red_upper_bound = 38
-        cv2.createTrackbar('red upper bound', 'slider_window', 38, 255, self.set_red_upper_bound)
-        self.blue_lower_bound = 95
-        cv2.createTrackbar('blue lower bound', 'slider_window', 95, 255, self.set_blue_lower_bound)
-        self.blue_upper_bound = 151
-        cv2.createTrackbar('blue upper bound', 'slider_window', 151, 255, self.set_blue_upper_bound)
-        self.green_lower_bound = 127
-        cv2.createTrackbar('green lower bound', 'slider_window', 127, 255, self.set_green_lower_bound)
-        self.green_upper_bound = 255
-        cv2.createTrackbar('green upper bound', 'slider_window', 255, 255, self.set_green_upper_bound)
+        self.hue_lower_bound = 95
+        cv2.createTrackbar('hue lower bound', 'slider_window', 95, 255, self.set_hue_lower_bound)
+        self.hue_upper_bound = 151
+        cv2.createTrackbar('hue upper bound', 'slider_window', 151, 255, self.set_hue_upper_bound)
+        self.saturation_lower_bound = 127
+        cv2.createTrackbar('saturation lower bound', 'slider_window', 127, 255, self.set_saturation_lower_bound)
+        self.saturation_upper_bound = 255
+        cv2.createTrackbar('saturation upper bound', 'slider_window', 255, 255, self.set_saturation_upper_bound)
+        self.value_lower_bound = 0
+        cv2.createTrackbar('value lower bound', 'slider_window', 0, 255, self.set_value_lower_bound)
+        self.value_upper_bound = 38
+        cv2.createTrackbar('value upper bound', 'slider_window', 38, 255, self.set_value_upper_bound)
 
         rospy.Subscriber(image_topic, Image, self.process_image)
         self.pub = rospy.Publisher('cmd_vel', Twist, queue_size=10)
 
-    def set_red_lower_bound(self, val):
-        """ A callback function to handle the OpenCV slider to select the red lower bound """
-        self.red_lower_bound = val
+    def set_hue_lower_bound(self, val):
+        """ A callback function to handle the OpenCV slider to select the hue lower bound """
+        self.hue_lower_bound = val
 
-    def set_red_upper_bound(self, val):
-        """ A callback function to handle the OpenCV slider to select the red upper bound """
-        self.red_upper_bound = val
+    def set_hue_upper_bound(self, val):
+        """ A callback function to handle the OpenCV slider to select the hue upper bound """
+        self.hue_upper_bound = val
 
-    def set_blue_lower_bound(self, val):
-        """ A callback function to handle the OpenCV slider to select the blue lower bound """
-        self.blue_lower_bound = val
+    def set_saturation_lower_bound(self, val):
+        """ A callback function to handle the OpenCV slider to select the saturation lower bound """
+        self.saturation_lower_bound = val
 
-    def set_blue_upper_bound(self, val):
-        """ A callback function to handle the OpenCV slider to select the blue upper bound """
-        self.blue_upper_bound = val
+    def set_saturation_upper_bound(self, val):
+        """ A callback function to handle the OpenCV slider to select the saturation upper bound """
+        self.saturation_upper_bound = val
 
-    def set_green_lower_bound(self, val):
-        """ A callback function to handle the OpenCV slider to select the green lower bound """
-        self.green_lower_bound = val
+    def set_value_lower_bound(self, val):
+        """ A callback function to handle the OpenCV slider to select the value lower bound """
+        self.value_lower_bound = val
 
-    def set_green_upper_bound(self, val):
-        """ A callback function to handle the OpenCV slider to select the green uppper bound """
-        self.green_upper_bound = val
+    def set_value_upper_bound(self, val):
+        """ A callback function to handle the OpenCV slider to select the value uppper bound """
+        self.value_upper_bound = val
 
     def process_image(self, msg):
         """ Process image messages from ROS and stash them in an attribute
@@ -78,13 +78,14 @@ class BallTracker(object):
 
         self.hsv_image = cv2.cvtColor(self.cv_image, cv2.COLOR_BGR2HSV)
 
-        lower_bounds = (self.blue_lower_bound, self.green_lower_bound, self.red_lower_bound)
-        upper_bounds = (self.blue_upper_bound, self.green_upper_bound, self.red_upper_bound)
+        lower_bounds = (self.hue_lower_bound, self.saturation_lower_bound, self.value_lower_bound)
+        upper_bounds = (self.hue_upper_bound, self.saturation_upper_bound, self.value_upper_bound)
         binary_image = cv2.inRange(self.hsv_image, lower_bounds, upper_bounds)
 
         moments = cv2.moments(binary_image)
         if moments['m00'] != 0:
             self.center_x, self.center_y = moments['m10']/moments['m00'], moments['m01']/moments['m00']
+            self.center_x = self.center_x / binary_image.shape[1] - 0.5
 
         cv2.imshow('threshold_image', binary_image)
         cv2.waitKey(5)
@@ -96,8 +97,7 @@ class BallTracker(object):
         my_twist.linear.x = 0.2
         while not rospy.is_shutdown():
         	# turn based on center of mass of ball
-            angular_vel = -(self.center_x / 640.0 - 0.5)
-            my_twist.angular.z = angular_vel
+            my_twist.angular.z = -self.center_x
             self.pub.publish(my_twist)
             r.sleep()
 
