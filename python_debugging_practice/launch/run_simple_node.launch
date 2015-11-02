@@ -1,0 +1,3 @@
+<launch>
+  <node name="simplenode" type="simple_node.py" pkg="python_debugging_practice" launch-prefix="xterm -e python -m pdb"/>
+</launch>
