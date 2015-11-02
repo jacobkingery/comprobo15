@@ -1,0 +1,3 @@
+[submodule "text_recognition"]
+	path = text_recognition
+	url = git@github.com:aclairekeum/text_recognition.git
