@@ -1,3 +1,6 @@
 [submodule "text_recognition"]
 	path = text_recognition
 	url = git@github.com:aclairekeum/text_recognition.git
+[submodule "project_polygon"]
+	path = project_polygon
+	url = git@github.com:lianilychee/project_polygon.git
