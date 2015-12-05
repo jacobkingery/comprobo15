@@ -52,6 +52,8 @@ class NeatoNode:
         """ Start up connection to the Neato Robot. """
         rospy.init_node('neato')
 
+        self.robot_name = rospy.get_param('~robot', '')
+
         self.port = rospy.get_param('~port', "/dev/ttyUSB0")
         rospy.loginfo("Using port: %s"%(self.port))
 
@@ -81,7 +83,7 @@ class NeatoNode:
         # NEED to reorder the laser scans and flip the laser around... this will not be intuitive for students!!
 
         # things that don't ever change
-        scan_link = rospy.get_param('~frame_id','base_laser_link')
+        scan_link = rospy.get_param('~frame_id','{}/base_laser_link'.format(self.robot_name))
         scan = LaserScan(header=rospy.Header(frame_id=scan_link)) 
         scan.angle_min = -pi
         scan.angle_max = pi
@@ -162,7 +164,7 @@ class NeatoNode:
                 odom.pose.pose.orientation = quaternion
                 odom.twist.twist.linear.x = dx/dt
                 odom.twist.twist.angular.z = dth/dt
-                self.odomBroadcaster.sendTransform( (self.x, self.y, 0), (quaternion.x, quaternion.y, quaternion.z, quaternion.w), curr_motor_time, "base_link", "odom" )
+                self.odomBroadcaster.sendTransform( (self.x, self.y, 0), (quaternion.x, quaternion.y, quaternion.z, quaternion.w), curr_motor_time, "{}/base_link".format(self.robot_name), "{}/odom".format(self.robot_name))
                 self.odomPub.publish(odom)
                 #print 'Got motors %f' % (time.time() - t_start)
             except Exception as err:
