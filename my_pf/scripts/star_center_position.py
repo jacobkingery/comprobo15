@@ -104,8 +104,12 @@ class MarkerProcessor(object):
             self.odom_frame_name = "odom"
 
         self.marker_locators = {}
-        self.add_marker_locator(MarkerLocator(0,(0.0,0.0),0))
-        self.add_marker_locator(MarkerLocator(1,(1.4/1.1,2.0/1.1),0))
+        self.add_marker_locator(MarkerLocator(0,(-6*12*2.54/100.0,0),0))
+        self.add_marker_locator(MarkerLocator(1,(0.0,0.0),pi))
+        self.add_marker_locator(MarkerLocator(2,(0.0,10*12*2.54/100.0),0))
+        self.add_marker_locator(MarkerLocator(3,(-6*12*2.54/100.0,6*12*2.54/100.0),0))
+
+        self.pose_correction = rospy.get_param('~pose_correction',0.0)
 
         self.marker_sub = rospy.Subscriber("ar_pose_marker",
                                            ARMarkers,
@@ -138,14 +142,18 @@ class MarkerProcessor(object):
                                                   marker.pose.pose.orientation.z,
                                                   marker.pose.pose.orientation.w))
             angle_diffs = TransformHelpers.angle_diff(euler_angles[0],pi), TransformHelpers.angle_diff(euler_angles[1],0)
+            print angle_diffs, marker.pose.pose.position.z
             if (marker.id in self.marker_locators and
-                2.4 <= marker.pose.pose.position.z <= 2.6 and
-                fabs(angle_diffs[0]) <= .2 and
-                fabs(angle_diffs[1]) <= .2):
+                3.2 <= marker.pose.pose.position.z <= 3.6 and
+                fabs(angle_diffs[0]) <= .4 and
+                fabs(angle_diffs[1]) <= .4):
+                print "FOUND IT!"
                 locator = self.marker_locators[marker.id]
-                xy_yaw = locator.get_camera_position(marker)
+                xy_yaw = list(locator.get_camera_position(marker))
+                xy_yaw[0] += self.pose_correction*cos(xy_yaw[2])
+                xy_yaw[1] += self.pose_correction*sin(xy_yaw[2])
                 orientation_tuple = quaternion_from_euler(0,0,xy_yaw[2])
-                pose = Pose(position=Point(x=xy_yaw[0],y=xy_yaw[1],z=0),
+                pose = Pose(position=Point(x=-xy_yaw[0],y=-xy_yaw[1],z=0),
                             orientation=Quaternion(x=orientation_tuple[0], y=orientation_tuple[1], z=orientation_tuple[2], w=orientation_tuple[3]))
                 # TODO: use markers timestamp instead of now() (unfortunately, not populated currently by ar_pose)
                 pose_stamped = PoseStamped(header=Header(stamp=rospy.Time.now(),frame_id="STAR"),pose=pose)
